@@ -1,0 +1,1100 @@
+bl_info = {
+    "name": "Advanced Material Editor",
+    "author": "407ro4d",
+    "version": (2, 1, 0),
+    "blender": (3, 0, 0),
+    "location": "View3D > Sidebar > Tools",
+    "description": "Advanced material editor with powder coating, sparkles, gradients and presets",
+    "category": "Material",
+}
+
+import bpy
+import mathutils
+from bpy.types import Panel, Operator, PropertyGroup
+from bpy.props import (FloatProperty, PointerProperty, BoolProperty, 
+                      FloatVectorProperty, IntProperty, EnumProperty)
+
+class PrincipledProperties(PropertyGroup):
+    # Main parameters
+    metallic: FloatProperty(
+        name="Metallic",
+        description="Metallic value",
+        min=0.0,
+        max=1.0,
+        default=0.0,
+        subtype='FACTOR'
+    )
+    
+    roughness: FloatProperty(
+        name="Roughness",
+        description="Roughness value",
+        min=0.0,
+        max=1.0,
+        default=0.5,
+        subtype='FACTOR'
+    )
+    
+    specular: FloatProperty(
+        name="Specular/IOR",
+        description="Specular or IOR value depending on Blender version",
+        min=0.0,
+        max=2.0,
+        default=0.5,
+        subtype='FACTOR'
+    )
+    
+    clearcoat: FloatProperty(
+        name="Clearcoat",
+        description="Clearcoat value",
+        min=0.0,
+        max=1.0,
+        default=0.0,
+        subtype='FACTOR'
+    )
+    
+    clearcoat_roughness: FloatProperty(
+        name="Clearcoat Roughness",
+        description="Clearcoat Roughness value",
+        min=0.0,
+        max=1.0,
+        default=0.0,
+        subtype='FACTOR'
+    )
+
+class PowderCoatingProperties(PropertyGroup):
+    # Powder coating parameters
+    base_roughness: FloatProperty(
+        name="Base Roughness",
+        description="Base material roughness",
+        min=0.0,
+        max=1.0,
+        default=0.3,
+        subtype='FACTOR'
+    )
+    
+    flake_density: FloatProperty(
+        name="Flake Density",
+        description="Number of flakes on surface",
+        min=0.0,
+        max=1.0,
+        default=0.5,
+        subtype='FACTOR'
+    )
+    
+    flake_size: FloatProperty(
+        name="Flake Size",
+        description="Size of individual flakes",
+        min=0.01,
+        max=0.5,
+        default=0.1,
+        subtype='FACTOR'
+    )
+    
+    flake_metallic: FloatProperty(
+        name="Flake Metallic",
+        description="Metallic effect of flakes",
+        min=0.0,
+        max=1.0,
+        default=0.8,
+        subtype='FACTOR'
+    )
+    
+    flake_roughness: FloatProperty(
+        name="Flake Roughness",
+        description="Roughness of flake surface",
+        min=0.0,
+        max=1.0,
+        default=0.2,
+        subtype='FACTOR'
+    )
+    
+    clearcoat: FloatProperty(
+        name="Clear Coat",
+        description="Thickness of protective glossy layer",
+        min=0.0,
+        max=1.0,
+        default=0.7,
+        subtype='FACTOR'
+    )
+
+class SparklesProperties(PropertyGroup):
+    # Sparkles parameters
+    sparkle_intensity: FloatProperty(
+        name="Sparkle Intensity",
+        description="Brightness and visibility of sparkles",
+        min=0.0,
+        max=2.0,
+        default=1.0,
+        subtype='FACTOR'
+    )
+    
+    sparkle_scale: FloatProperty(
+        name="Sparkle Scale",
+        description="Scale of sparkle pattern",
+        min=1.0,
+        max=100.0,
+        default=50.0
+    )
+    
+    sparkle_detail: FloatProperty(
+        name="Detail",
+        description="Detail of sparkle pattern",
+        min=0.0,
+        max=16.0,
+        default=8.0
+    )
+    
+    sparkle_roughness: FloatProperty(
+        name="Roughness",
+        description="Roughness of sparkle pattern",
+        min=0.0,
+        max=1.0,
+        default=0.3,
+        subtype='FACTOR'
+    )
+    
+    sparkle_color: FloatVectorProperty(
+        name="Sparkle Color",
+        description="Color of metallic sparkles",
+        subtype='COLOR',
+        size=3,
+        default=(1.0, 0.9, 0.5),
+        min=0.0,
+        max=1.0
+    )
+    
+    threshold: FloatProperty(
+        name="Threshold",
+        description="Threshold for creating individual sparkles",
+        min=0.0,
+        max=1.0,
+        default=0.7,
+        subtype='FACTOR'
+    )
+
+class GradientProperties(PropertyGroup):
+    # Gradient parameters
+    gradient_type: EnumProperty(
+        name="Gradient Type",
+        description="Type of gradient texture",
+        items=[
+            ('LINEAR', "Linear", "Linear gradient"),
+            ('RADIAL', "Radial", "Radial gradient"),
+            ('QUADRATIC', "Quadratic", "Quadratic gradient"),
+            ('SPHERICAL', "Spherical", "Spherical gradient")
+        ],
+        default='LINEAR'
+    )
+    
+    gradient_color1: FloatVectorProperty(
+        name="Color 1",
+        description="First gradient color",
+        subtype='COLOR',
+        size=3,
+        default=(0.1, 0.3, 0.8),
+        min=0.0,
+        max=1.0
+    )
+    
+    gradient_color2: FloatVectorProperty(
+        name="Color 2",
+        description="Second gradient color",
+        subtype='COLOR',
+        size=3,
+        default=(0.8, 0.2, 0.1),
+        min=0.0,
+        max=1.0
+    )
+    
+    gradient_color3: FloatVectorProperty(
+        name="Color 3",
+        description="Third gradient color (optional)",
+        subtype='COLOR',
+        size=3,
+        default=(0.9, 0.9, 0.1),
+        min=0.0,
+        max=1.0
+    )
+    
+    use_three_colors: BoolProperty(
+        name="Three Colors",
+        description="Use three colors instead of two",
+        default=False
+    )
+    
+    gradient_rotation: FloatProperty(
+        name="Rotation",
+        description="Gradient rotation",
+        min=0.0,
+        max=6.28319,  # 2*PI
+        default=0.0,
+        subtype='ANGLE'
+    )
+    
+    gradient_scale: FloatProperty(
+        name="Scale",
+        description="Gradient scale",
+        min=0.1,
+        max=10.0,
+        default=1.0
+    )
+    
+    gradient_offset: FloatVectorProperty(
+        name="Offset",
+        description="Gradient offset",
+        subtype='TRANSLATION',
+        size=3,
+        default=(0.0, 0.0, 0.0)
+    )
+
+# Common functions
+def connect_alpha_to_bsdf(material):
+    """Connects alpha channel of all Image Textures to Principled BSDF in material"""
+    if not material.use_nodes:
+        return False
+    
+    node_tree = material.node_tree
+    principled_bsdf = None
+    image_textures = []
+    
+    for node in node_tree.nodes:
+        if node.type == 'BSDF_PRINCIPLED':
+            principled_bsdf = node
+        elif node.type == 'TEX_IMAGE':
+            image_textures.append(node)
+    
+    if not principled_bsdf or not image_textures:
+        return False
+    
+    connected_count = 0
+    for tex_node in image_textures:
+        if tex_node.outputs['Alpha'].is_linked:
+            continue
+        node_tree.links.new(tex_node.outputs['Alpha'], principled_bsdf.inputs['Alpha'])
+        connected_count += 1
+    
+    return connected_count > 0
+
+def safe_set_input(principled_node, input_name, value):
+    """Safely sets input value if it exists"""
+    try:
+        principled_node.inputs[input_name].default_value = value
+        return True
+    except KeyError:
+        return False
+
+def safe_get_input(principled_node, input_name, default_value=None):
+    """Safely gets input value if it exists"""
+    try:
+        return principled_node.inputs[input_name].default_value
+    except KeyError:
+        return default_value
+
+# Operators for Principled BSDF
+class PRINCIPLED_OT_update_materials(Operator):
+    """Update materials of selected objects"""
+    bl_idname = "principled.update_materials"
+    bl_label = "Apply Changes"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    def execute(self, context):
+        scene = context.scene
+        principled_tool = scene.principled_tool
+        
+        selected_objects = [obj for obj in context.selected_objects if obj.type == 'MESH']
+        
+        if not selected_objects:
+            self.report({'WARNING'}, "No mesh objects selected")
+            return {'CANCELLED'}
+        
+        updated_count = 0
+        
+        for obj in selected_objects:
+            if obj.material_slots:
+                for mat_slot in obj.material_slots:
+                    if mat_slot.material and mat_slot.material.use_nodes:
+                        nodes = mat_slot.material.node_tree.nodes
+                        principled_node = None
+                        for node in nodes:
+                            if node.type == 'BSDF_PRINCIPLED':
+                                principled_node = node
+                                break
+                        
+                        if principled_node:
+                            safe_set_input(principled_node, 'Metallic', principled_tool.metallic)
+                            safe_set_input(principled_node, 'Roughness', principled_tool.roughness)
+                            safe_set_input(principled_node, 'Specular', principled_tool.specular)
+                            safe_set_input(principled_node, 'IOR', principled_tool.specular)
+                            safe_set_input(principled_node, 'Clearcoat', principled_tool.clearcoat)
+                            safe_set_input(principled_node, 'Clearcoat Roughness', principled_tool.clearcoat_roughness)
+                            updated_count += 1
+        
+        self.report({'INFO'}, f"Updated materials: {updated_count}")
+        return {'FINISHED'}
+
+class PRINCIPLED_OT_reset_values(Operator):
+    """Reset values to default"""
+    bl_idname = "principled.reset_values"
+    bl_label = "Reset"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    def execute(self, context):
+        scene = context.scene
+        principled_tool = scene.principled_tool
+        
+        principled_tool.metallic = 0.0
+        principled_tool.roughness = 0.5
+        principled_tool.specular = 0.5
+        principled_tool.clearcoat = 0.0
+        principled_tool.clearcoat_roughness = 0.0
+        
+        self.report({'INFO'}, "Values reset")
+        return {'FINISHED'}
+
+class PRINCIPLED_OT_copy_from_active(Operator):
+    """Copy values from active object"""
+    bl_idname = "principled.copy_from_active"
+    bl_label = "Copy from Active"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    def execute(self, context):
+        active_obj = context.active_object
+        
+        if not active_obj or active_obj.type != 'MESH' or not active_obj.material_slots:
+            self.report({'WARNING'}, "Active object has no materials")
+            return {'CANCELLED'}
+        
+        scene = context.scene
+        principled_tool = scene.principled_tool
+        
+        for mat_slot in active_obj.material_slots:
+            if mat_slot.material and mat_slot.material.use_nodes:
+                nodes = mat_slot.material.node_tree.nodes
+                for node in nodes:
+                    if node.type == 'BSDF_PRINCIPLED':
+                        principled_tool.metallic = safe_get_input(node, 'Metallic', 0.0)
+                        principled_tool.roughness = safe_get_input(node, 'Roughness', 0.5)
+                        
+                        specular_val = safe_get_input(node, 'Specular', None)
+                        if specular_val is not None:
+                            principled_tool.specular = specular_val
+                        else:
+                            principled_tool.specular = safe_get_input(node, 'IOR', 0.5)
+                        
+                        principled_tool.clearcoat = safe_get_input(node, 'Clearcoat', 0.0)
+                        principled_tool.clearcoat_roughness = safe_get_input(node, 'Clearcoat Roughness', 0.0)
+                        
+                        self.report({'INFO'}, "Values copied from active object")
+                        return {'FINISHED'}
+        
+        self.report({'WARNING'}, "No Principled BSDF found in active object's materials")
+        return {'CANCELLED'}
+
+# Material presets
+class PRINCIPLED_OT_preset_metal(Operator):
+    """Set metal preset"""
+    bl_idname = "principled.preset_metal"
+    bl_label = "Metal"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    def execute(self, context):
+        scene = context.scene
+        principled_tool = scene.principled_tool
+        
+        principled_tool.metallic = 1.0
+        principled_tool.roughness = 0.2
+        principled_tool.specular = 0.5
+        principled_tool.clearcoat = 0.0
+        principled_tool.clearcoat_roughness = 0.1
+        
+        bpy.ops.principled.update_materials()
+        self.report({'INFO'}, "Applied preset: Metal")
+        return {'FINISHED'}
+
+class PRINCIPLED_OT_preset_plastic(Operator):
+    """Set plastic preset"""
+    bl_idname = "principled.preset_plastic"
+    bl_label = "Plastic"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    def execute(self, context):
+        scene = context.scene
+        principled_tool = scene.principled_tool
+        
+        principled_tool.metallic = 0.0
+        principled_tool.roughness = 0.4
+        principled_tool.specular = 0.5
+        principled_tool.clearcoat = 0.0
+        principled_tool.clearcoat_roughness = 0.0
+        
+        bpy.ops.principled.update_materials()
+        self.report({'INFO'}, "Applied preset: Plastic")
+        return {'FINISHED'}
+
+class PRINCIPLED_OT_preset_glass(Operator):
+    """Set glass preset"""
+    bl_idname = "principled.preset_glass"
+    bl_label = "Glass"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    def execute(self, context):
+        scene = context.scene
+        principled_tool = scene.principled_tool
+        
+        principled_tool.metallic = 0.0
+        principled_tool.roughness = 0.0
+        principled_tool.specular = 1.45  # IOR for glass
+        principled_tool.clearcoat = 0.0
+        principled_tool.clearcoat_roughness = 0.0
+        
+        bpy.ops.principled.update_materials()
+        self.report({'INFO'}, "Applied preset: Glass")
+        return {'FINISHED'}
+
+class PRINCIPLED_OT_preset_rubber(Operator):
+    """Set rubber preset"""
+    bl_idname = "principled.preset_rubber"
+    bl_label = "Rubber"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    def execute(self, context):
+        scene = context.scene
+        principled_tool = scene.principled_tool
+        
+        principled_tool.metallic = 0.0
+        principled_tool.roughness = 0.8
+        principled_tool.specular = 0.5
+        principled_tool.clearcoat = 0.0
+        principled_tool.clearcoat_roughness = 0.0
+        
+        bpy.ops.principled.update_materials()
+        self.report({'INFO'}, "Applied preset: Rubber")
+        return {'FINISHED'}
+
+class PRINCIPLED_OT_preset_ceramic(Operator):
+    """Set ceramic preset"""
+    bl_idname = "principled.preset_ceramic"
+    bl_label = "Ceramic"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    def execute(self, context):
+        scene = context.scene
+        principled_tool = scene.principled_tool
+        
+        principled_tool.metallic = 0.0
+        principled_tool.roughness = 0.1
+        principled_tool.specular = 0.9
+        principled_tool.clearcoat = 0.3
+        principled_tool.clearcoat_roughness = 0.1
+        
+        bpy.ops.principled.update_materials()
+        self.report({'INFO'}, "Applied preset: Ceramic")
+        return {'FINISHED'}
+
+class PRINCIPLED_OT_preset_wood(Operator):
+    """Set wood preset"""
+    bl_idname = "principled.preset_wood"
+    bl_label = "Wood"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    def execute(self, context):
+        scene = context.scene
+        principled_tool = scene.principled_tool
+        
+        principled_tool.metallic = 0.0
+        principled_tool.roughness = 0.7
+        principled_tool.specular = 0.3
+        principled_tool.clearcoat = 0.2
+        principled_tool.clearcoat_roughness = 0.3
+        
+        bpy.ops.principled.update_materials()
+        self.report({'INFO'}, "Applied preset: Wood")
+        return {'FINISHED'}
+
+class PRINCIPLED_OT_preset_powder_coating(Operator):
+    """Set powder coating with sparkles preset"""
+    bl_idname = "principled.preset_powder_coating"
+    bl_label = "Powder Coating"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    def execute(self, context):
+        scene = context.scene
+        principled_tool = scene.principled_tool
+        
+        principled_tool.metallic = 0.1
+        principled_tool.roughness = 0.3
+        principled_tool.specular = 0.8
+        principled_tool.clearcoat = 0.7
+        principled_tool.clearcoat_roughness = 0.2
+        
+        bpy.ops.principled.update_materials()
+        self.report({'INFO'}, "Applied preset: Powder Coating")
+        return {'FINISHED'}
+
+# Operators for powder coating
+class POWDER_OT_create_coating(Operator):
+    """Create powder coating material"""
+    bl_idname = "powder.create_coating"
+    bl_label = "Create Powder Coating"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    def execute(self, context):
+        scene = context.scene
+        powder_tool = scene.powder_coating_tool
+        
+        selected_objects = [obj for obj in context.selected_objects if obj.type == 'MESH']
+        
+        if not selected_objects:
+            self.report({'WARNING'}, "No mesh objects selected")
+            return {'CANCELLED'}
+        
+        for obj in selected_objects:
+            mat_name = f"Powder_Coating_{obj.name}"
+            material = bpy.data.materials.new(name=mat_name)
+            material.use_nodes = True
+            
+            nodes = material.node_tree.nodes
+            links = material.node_tree.links
+            nodes.clear()
+            
+            principled = nodes.new(type='ShaderNodeBsdfPrincipled')
+            principled.location = (0, 0)
+            output = nodes.new(type='ShaderNodeOutputMaterial')
+            output.location = (400, 0)
+            
+            noise = nodes.new(type='ShaderNodeTexNoise')
+            noise.location = (-600, 200)
+            noise.inputs['Scale'].default_value = powder_tool.flake_density * 100 + 10
+            noise.inputs['Detail'].default_value = 8.0
+            noise.inputs['Roughness'].default_value = powder_tool.flake_roughness
+            
+            color_ramp = nodes.new(type='ShaderNodeValToRGB')
+            color_ramp.location = (-400, 200)
+            color_ramp.color_ramp.elements[0].position = 0.6
+            color_ramp.color_ramp.elements[0].color = (0, 0, 0, 1)
+            color_ramp.color_ramp.elements[1].position = 0.8
+            color_ramp.color_ramp.elements[1].color = (1, 1, 1, 1)
+            
+            mix_shader = nodes.new(type='ShaderNodeMixShader')
+            mix_shader.location = (200, 0)
+            
+            flake_bsdf = nodes.new(type='ShaderNodeBsdfPrincipled')
+            flake_bsdf.location = (0, 200)
+            flake_bsdf.inputs['Metallic'].default_value = powder_tool.flake_metallic
+            flake_bsdf.inputs['Roughness'].default_value = powder_tool.flake_roughness
+            flake_bsdf.inputs['Base Color'].default_value = (1.0, 0.9, 0.5, 1.0)
+            
+            principled.inputs['Roughness'].default_value = powder_tool.base_roughness
+            principled.inputs['Metallic'].default_value = 0.0
+            safe_set_input(principled, 'Clearcoat', powder_tool.clearcoat)
+            
+            tex_coord = nodes.new(type='ShaderNodeTexCoord')
+            tex_coord.location = (-1000, 200)
+            mapping = nodes.new(type='ShaderNodeMapping')
+            mapping.location = (-800, 200)
+            
+            links.new(tex_coord.outputs['Generated'], mapping.inputs['Vector'])
+            links.new(mapping.outputs['Vector'], noise.inputs['Vector'])
+            links.new(noise.outputs['Fac'], color_ramp.inputs['Fac'])
+            links.new(color_ramp.outputs['Color'], mix_shader.inputs['Fac'])
+            links.new(principled.outputs['BSDF'], mix_shader.inputs[1])
+            links.new(flake_bsdf.outputs['BSDF'], mix_shader.inputs[2])
+            links.new(mix_shader.outputs['Shader'], output.inputs['Surface'])
+            
+            if obj.data.materials:
+                obj.data.materials[0] = material
+            else:
+                obj.data.materials.append(material)
+        
+        self.report({'INFO'}, f"Created powder coating materials for {len(selected_objects)} objects")
+        return {'FINISHED'}
+
+# Operators for sparkles
+class SPARKLES_OT_create_sparkles(Operator):
+    """Create advanced sparkle material"""
+    bl_idname = "sparkles.create_sparkles"
+    bl_label = "Create Sparkle Material"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    def execute(self, context):
+        scene = context.scene
+        sparkles_tool = scene.sparkles_tool
+        
+        selected_objects = [obj for obj in context.selected_objects if obj.type == 'MESH']
+        
+        if not selected_objects:
+            self.report({'WARNING'}, "No mesh objects selected")
+            return {'CANCELLED'}
+        
+        for obj in selected_objects:
+            mat_name = f"Sparkles_Material_{obj.name}"
+            material = bpy.data.materials.new(name=mat_name)
+            material.use_nodes = True
+            
+            nodes = material.node_tree.nodes
+            links = material.node_tree.links
+            nodes.clear()
+            
+            principled = nodes.new(type='ShaderNodeBsdfPrincipled')
+            principled.location = (0, 0)
+            output = nodes.new(type='ShaderNodeOutputMaterial')
+            output.location = (400, 0)
+            
+            noise1 = nodes.new(type='ShaderNodeTexNoise')
+            noise1.location = (-800, 300)
+            noise1.inputs['Scale'].default_value = sparkles_tool.sparkle_scale
+            noise1.inputs['Detail'].default_value = sparkles_tool.sparkle_detail
+            noise1.inputs['Roughness'].default_value = sparkles_tool.sparkle_roughness
+            
+            noise2 = nodes.new(type='ShaderNodeTexNoise')
+            noise2.location = (-800, 0)
+            noise2.inputs['Scale'].default_value = sparkles_tool.sparkle_scale * 2
+            noise2.inputs['Detail'].default_value = sparkles_tool.sparkle_detail
+            
+            color_ramp = nodes.new(type='ShaderNodeValToRGB')
+            color_ramp.location = (-400, 200)
+            color_ramp.color_ramp.elements[0].position = sparkles_tool.threshold - 0.2
+            color_ramp.color_ramp.elements[0].color = (0, 0, 0, 1)
+            color_ramp.color_ramp.elements[1].position = sparkles_tool.threshold
+            color_ramp.color_ramp.elements[1].color = (1, 1, 1, 1)
+            
+            multiply = nodes.new(type='ShaderNodeMath')
+            multiply.location = (-600, -200)
+            multiply.operation = 'MULTIPLY'
+            multiply.inputs[1].default_value = sparkles_tool.sparkle_intensity
+            
+            tex_coord = nodes.new(type='ShaderNodeTexCoord')
+            tex_coord.location = (-1200, 200)
+            mapping = nodes.new(type='ShaderNodeMapping')
+            mapping.location = (-1000, 200)
+            
+            links.new(tex_coord.outputs['Generated'], mapping.inputs['Vector'])
+            links.new(mapping.outputs['Vector'], noise1.inputs['Vector'])
+            links.new(mapping.outputs['Vector'], noise2.inputs['Vector'])
+            links.new(noise1.outputs['Fac'], multiply.inputs[0])
+            links.new(noise2.outputs['Fac'], multiply.inputs[1])
+            links.new(multiply.outputs['Value'], color_ramp.inputs['Fac'])
+            
+            try:
+                links.new(color_ramp.outputs['Color'], principled.inputs['Specular'])
+            except KeyError:
+                try:
+                    links.new(color_ramp.outputs['Color'], principled.inputs['IOR'])
+                except KeyError:
+                    pass
+            
+            emission = nodes.new(type='ShaderNodeEmission')
+            emission.location = (0, 200)
+            emission.inputs['Color'].default_value = (*sparkles_tool.sparkle_color, 1.0)
+            emission.inputs['Strength'].default_value = sparkles_tool.sparkle_intensity
+            
+            mix_shader = nodes.new(type='ShaderNodeMixShader')
+            mix_shader.location = (200, 0)
+            links.new(color_ramp.outputs['Color'], mix_shader.inputs['Fac'])
+            links.new(emission.outputs['Emission'], mix_shader.inputs[1])
+            links.new(principled.outputs['BSDF'], mix_shader.inputs[2])
+            links.new(mix_shader.outputs['Shader'], output.inputs['Surface'])
+            
+            if obj.data.materials:
+                obj.data.materials[0] = material
+            else:
+                obj.data.materials.append(material)
+        
+        self.report({'INFO'}, f"Created sparkle materials for {len(selected_objects)} objects")
+        return {'FINISHED'}
+
+# Operators for gradient
+class GRADIENT_OT_create_gradient(Operator):
+    """Create gradient material"""
+    bl_idname = "gradient.create_gradient"
+    bl_label = "Create Gradient Material"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    def execute(self, context):
+        scene = context.scene
+        gradient_tool = scene.gradient_tool
+        
+        selected_objects = [obj for obj in context.selected_objects if obj.type == 'MESH']
+        
+        if not selected_objects:
+            self.report({'WARNING'}, "No mesh objects selected")
+            return {'CANCELLED'}
+        
+        for obj in selected_objects:
+            mat_name = f"Gradient_Material_{obj.name}"
+            material = bpy.data.materials.new(name=mat_name)
+            material.use_nodes = True
+            
+            nodes = material.node_tree.nodes
+            links = material.node_tree.links
+            nodes.clear()
+            
+            principled = nodes.new(type='ShaderNodeBsdfPrincipled')
+            principled.location = (0, 0)
+            output = nodes.new(type='ShaderNodeOutputMaterial')
+            output.location = (400, 0)
+            
+            if gradient_tool.gradient_type == 'LINEAR':
+                gradient = nodes.new(type='ShaderNodeTexGradient')
+                gradient.gradient_type = 'LINEAR'
+            elif gradient_tool.gradient_type == 'RADIAL':
+                gradient = nodes.new(type='ShaderNodeTexGradient')
+                gradient.gradient_type = 'RADIAL'
+            elif gradient_tool.gradient_type == 'QUADRATIC':
+                gradient = nodes.new(type='ShaderNodeTexGradient')
+                gradient.gradient_type = 'QUADRATIC'
+            else:
+                gradient = nodes.new(type='ShaderNodeTexGradient')
+                gradient.gradient_type = 'SPHERICAL'
+            
+            gradient.location = (-600, 0)
+            
+            color_ramp = nodes.new(type='ShaderNodeValToRGB')
+            color_ramp.location = (-400, 0)
+            
+            if gradient_tool.use_three_colors:
+                color_ramp.color_ramp.elements[0].color = (*gradient_tool.gradient_color1, 1.0)
+                color_ramp.color_ramp.elements[0].position = 0.0
+                
+                if len(color_ramp.color_ramp.elements) < 3:
+                    color_ramp.color_ramp.elements.new(0.5)
+                color_ramp.color_ramp.elements[1].color = (*gradient_tool.gradient_color2, 1.0)
+                color_ramp.color_ramp.elements[1].position = 0.5
+                
+                color_ramp.color_ramp.elements[2].color = (*gradient_tool.gradient_color3, 1.0)
+                color_ramp.color_ramp.elements[2].position = 1.0
+            else:
+                color_ramp.color_ramp.elements[0].color = (*gradient_tool.gradient_color1, 1.0)
+                color_ramp.color_ramp.elements[0].position = 0.0
+                color_ramp.color_ramp.elements[1].color = (*gradient_tool.gradient_color2, 1.0)
+                color_ramp.color_ramp.elements[1].position = 1.0
+                
+                while len(color_ramp.color_ramp.elements) > 2:
+                    color_ramp.color_ramp.elements.remove(color_ramp.color_ramp.elements[1])
+            
+            mapping = nodes.new(type='ShaderNodeMapping')
+            mapping.location = (-1000, 0)
+            mapping.inputs['Rotation'].default_value = (0, 0, gradient_tool.gradient_rotation)
+            mapping.inputs['Scale'].default_value = (gradient_tool.gradient_scale, gradient_tool.gradient_scale, gradient_tool.gradient_scale)
+            mapping.inputs['Location'].default_value = gradient_tool.gradient_offset
+            
+            tex_coord = nodes.new(type='ShaderNodeTexCoord')
+            tex_coord.location = (-1200, 0)
+            
+            links.new(tex_coord.outputs['Generated'], mapping.inputs['Vector'])
+            links.new(mapping.outputs['Vector'], gradient.inputs['Vector'])
+            links.new(gradient.outputs['Color'], color_ramp.inputs['Fac'])
+            links.new(color_ramp.outputs['Color'], principled.inputs['Base Color'])
+            links.new(principled.outputs['BSDF'], output.inputs['Surface'])
+            
+            if obj.data.materials:
+                obj.data.materials[0] = material
+            else:
+                obj.data.materials.append(material)
+        
+        self.report({'INFO'}, f"Created gradient materials for {len(selected_objects)} objects")
+        return {'FINISHED'}
+
+# Operators for Alpha channels
+class PRINCIPLED_OT_connect_alpha_selected(Operator):
+    """Connect alpha channels of selected objects"""
+    bl_idname = "principled.connect_alpha_selected"
+    bl_label = "Connect Alpha to Selected"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    def execute(self, context):
+        selected_objects = [obj for obj in context.selected_objects if obj.type == 'MESH']
+        
+        if not selected_objects:
+            self.report({'WARNING'}, "No mesh objects selected")
+            return {'CANCELLED'}
+        
+        connected_materials = 0
+        total_connections = 0
+        
+        for obj in selected_objects:
+            if obj.material_slots:
+                for mat_slot in obj.material_slots:
+                    if mat_slot.material:
+                        if connect_alpha_to_bsdf(mat_slot.material):
+                            connected_materials += 1
+                            node_tree = mat_slot.material.node_tree
+                            if node_tree:
+                                for node in node_tree.nodes:
+                                    if node.type == 'TEX_IMAGE' and node.outputs['Alpha'].is_linked:
+                                        total_connections += 1
+        
+        if connected_materials > 0:
+            self.report({'INFO'}, f"Connected alpha channels: {total_connections} in {connected_materials} materials")
+        else:
+            self.report({'WARNING'}, "No suitable materials found for alpha connection")
+        
+        return {'FINISHED'}
+
+class PRINCIPLED_OT_connect_alpha_all(Operator):
+    """Connect alpha channels in all scene materials"""
+    bl_idname = "principled.connect_alpha_all"
+    bl_label = "Connect Alpha to All"
+    bl_description = "Connect Image Texture alpha channels to BSDF in all scene materials"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    def execute(self, context):
+        connected_materials = 0
+        total_connections = 0
+        
+        for material in bpy.data.materials:
+            if connect_alpha_to_bsdf(material):
+                connected_materials += 1
+                node_tree = material.node_tree
+                if node_tree:
+                    for node in node_tree.nodes:
+                        if node.type == 'TEX_IMAGE' and node.outputs['Alpha'].is_linked:
+                            total_connections += 1
+        
+        self.report({'INFO'}, f"Processed materials: {connected_materials}, connections: {total_connections}")
+        return {'FINISHED'}
+
+# Panels
+class VIEW3D_PT_material_editor_main(Panel):
+    """Main material editor panel"""
+    bl_label = "Advanced Material Editor"
+    bl_idname = "VIEW3D_PT_material_editor_main"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = "Tools"
+    
+    def draw(self, context):
+        layout = self.layout
+        scene = context.scene
+        
+        selected_count = len([obj for obj in context.selected_objects if obj.type == 'MESH'])
+        layout.label(text=f"Selected objects: {selected_count}")
+        
+        if selected_count == 0:
+            layout.label(text="Select mesh objects", icon='ERROR')
+            return
+        
+        # Quick access to all editors
+        layout.label(text="Quick Editors:", icon='MATERIAL')
+        
+        row = layout.row(align=True)
+        row.operator("powder.create_coating", text="Powder", icon='PARTICLES')
+        row.operator("sparkles.create_sparkles", text="Sparkles", icon='SHADING_RENDERED')
+        
+        row = layout.row(align=True)
+        row.operator("gradient.create_gradient", text="Gradient", icon='COLOR')
+        row.operator("principled.update_materials", text="Basic", icon='NODE_MATERIAL')
+
+class VIEW3D_PT_basic_editor(Panel):
+    """Basic Principled BSDF editor"""
+    bl_label = "Basic BSDF Parameters"
+    bl_idname = "VIEW3D_PT_basic_editor"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = "Tools"
+    bl_parent_id = "VIEW3D_PT_material_editor_main"
+    
+    def draw(self, context):
+        layout = self.layout
+        scene = context.scene
+        principled_tool = scene.principled_tool
+        
+        layout.label(text="Main Parameters:", icon='NODE_MATERIAL')
+        
+        layout.prop(principled_tool, "metallic")
+        layout.prop(principled_tool, "roughness")
+        layout.prop(principled_tool, "specular")
+        layout.prop(principled_tool, "clearcoat")
+        layout.prop(principled_tool, "clearcoat_roughness")
+        
+        layout.separator()
+        
+        row = layout.row()
+        row.operator("principled.update_materials", icon='MATERIAL')
+        row.operator("principled.reset_values", icon='LOOP_BACK')
+        
+        layout.operator("principled.copy_from_active", icon='COPY_ID')
+        
+        # Material presets
+        layout.separator()
+        layout.label(text="Quick Presets:", icon='PRESET')
+        
+        row = layout.row(align=True)
+        row.operator("principled.preset_metal", text="Metal")
+        row.operator("principled.preset_plastic", text="Plastic")
+        
+        row = layout.row(align=True)
+        row.operator("principled.preset_glass", text="Glass")
+        row.operator("principled.preset_rubber", text="Rubber")
+        
+        row = layout.row(align=True)
+        row.operator("principled.preset_ceramic", text="Ceramic")
+        row.operator("principled.preset_wood", text="Wood")
+        
+        row = layout.row(align=True)
+        row.operator("principled.preset_powder_coating", text="Powder Coating", icon='PARTICLES')
+
+class VIEW3D_PT_powder_coating_editor(Panel):
+    """Powder coating editor"""
+    bl_label = "Powder Coating"
+    bl_idname = "VIEW3D_PT_powder_coating_editor"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = "Tools"
+    bl_parent_id = "VIEW3D_PT_material_editor_main"
+    
+    def draw(self, context):
+        layout = self.layout
+        scene = context.scene
+        powder_tool = scene.powder_coating_tool
+        
+        layout.label(text="Coating Settings:", icon='PARTICLES')
+        
+        layout.prop(powder_tool, "base_roughness")
+        layout.prop(powder_tool, "clearcoat")
+        
+        layout.separator()
+        layout.label(text="Flakes:", icon='RENDERLAYERS')
+        
+        layout.prop(powder_tool, "flake_density")
+        layout.prop(powder_tool, "flake_size")
+        layout.prop(powder_tool, "flake_metallic")
+        layout.prop(powder_tool, "flake_roughness")
+        
+        layout.separator()
+        layout.operator("powder.create_coating", icon='ADD')
+
+class VIEW3D_PT_sparkles_editor(Panel):
+    """Sparkles editor"""
+    bl_label = "Metallic Sparkles"
+    bl_idname = "VIEW3D_PT_sparkles_editor"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = "Tools"
+    bl_parent_id = "VIEW3D_PT_material_editor_main"
+    
+    def draw(self, context):
+        layout = self.layout
+        scene = context.scene
+        sparkles_tool = scene.sparkles_tool
+        
+        layout.label(text="Main Settings:", icon='RENDERLAYERS')
+        
+        layout.prop(sparkles_tool, "sparkle_intensity")
+        layout.prop(sparkles_tool, "threshold")
+        
+        layout.separator()
+        layout.label(text="Sparkle Texture:", icon='TEXTURE')
+        
+        layout.prop(sparkles_tool, "sparkle_scale")
+        layout.prop(sparkles_tool, "sparkle_detail")
+        layout.prop(sparkles_tool, "sparkle_roughness")
+        
+        layout.separator()
+        layout.label(text="Sparkle Color:", icon='COLOR')
+        layout.prop(sparkles_tool, "sparkle_color")
+        
+        layout.separator()
+        layout.operator("sparkles.create_sparkles", icon='ADD')
+
+class VIEW3D_PT_gradient_editor(Panel):
+    """Gradient editor"""
+    bl_label = "Gradient Materials"
+    bl_idname = "VIEW3D_PT_gradient_editor"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = "Tools"
+    bl_parent_id = "VIEW3D_PT_material_editor_main"
+    
+    def draw(self, context):
+        layout = self.layout
+        scene = context.scene
+        gradient_tool = scene.gradient_tool
+        
+        layout.label(text="Gradient Type:", icon='MATERIAL')
+        layout.prop(gradient_tool, "gradient_type", text="")
+        
+        layout.separator()
+        layout.label(text="Gradient Colors:", icon='COLOR')
+        
+        layout.prop(gradient_tool, "use_three_colors")
+        layout.prop(gradient_tool, "gradient_color1")
+        layout.prop(gradient_tool, "gradient_color2")
+        if gradient_tool.use_three_colors:
+            layout.prop(gradient_tool, "gradient_color3")
+        
+        layout.separator()
+        layout.label(text="Transformation:", icon='ORIENTATION_GIMBAL')
+        
+        layout.prop(gradient_tool, "gradient_rotation")
+        layout.prop(gradient_tool, "gradient_scale")
+        layout.prop(gradient_tool, "gradient_offset")
+        
+        layout.separator()
+        layout.operator("gradient.create_gradient", icon='ADD')
+
+class VIEW3D_PT_alpha_tools(Panel):
+    """Alpha channel tools"""
+    bl_label = "Alpha Channel Tools"
+    bl_idname = "VIEW3D_PT_alpha_tools"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = "Tools"
+    bl_parent_id = "VIEW3D_PT_material_editor_main"
+    
+    def draw(self, context):
+        layout = self.layout
+        
+        layout.label(text="Connect Alpha to BSDF:", icon='TEXTURE')
+        layout.operator("principled.connect_alpha_selected", text="For Selected Objects", icon='OBJECT_DATA')
+        layout.operator("principled.connect_alpha_all", text="For All Scene Materials", icon='WORLD')
+
+# Classes for registration
+classes = (
+    PrincipledProperties,
+    PowderCoatingProperties,
+    SparklesProperties,
+    GradientProperties,
+    PRINCIPLED_OT_update_materials,
+    PRINCIPLED_OT_reset_values,
+    PRINCIPLED_OT_copy_from_active,
+    PRINCIPLED_OT_preset_metal,
+    PRINCIPLED_OT_preset_plastic,
+    PRINCIPLED_OT_preset_glass,
+    PRINCIPLED_OT_preset_rubber,
+    PRINCIPLED_OT_preset_ceramic,
+    PRINCIPLED_OT_preset_wood,
+    PRINCIPLED_OT_preset_powder_coating,
+    PRINCIPLED_OT_connect_alpha_selected,
+    PRINCIPLED_OT_connect_alpha_all,
+    POWDER_OT_create_coating,
+    SPARKLES_OT_create_sparkles,
+    GRADIENT_OT_create_gradient,
+    VIEW3D_PT_material_editor_main,
+    VIEW3D_PT_basic_editor,
+    VIEW3D_PT_powder_coating_editor,
+    VIEW3D_PT_sparkles_editor,
+    VIEW3D_PT_gradient_editor,
+    VIEW3D_PT_alpha_tools,
+)
+
+def register():
+    for cls in classes:
+        bpy.utils.register_class(cls)
+    
+    bpy.types.Scene.principled_tool = PointerProperty(type=PrincipledProperties)
+    bpy.types.Scene.powder_coating_tool = PointerProperty(type=PowderCoatingProperties)
+    bpy.types.Scene.sparkles_tool = PointerProperty(type=SparklesProperties)
+    bpy.types.Scene.gradient_tool = PointerProperty(type=GradientProperties)
+
+def unregister():
+    for cls in reversed(classes):
+        bpy.utils.unregister_class(cls)
+    
+    del bpy.types.Scene.principled_tool
+    del bpy.types.Scene.powder_coating_tool
+    del bpy.types.Scene.sparkles_tool
+    del bpy.types.Scene.gradient_tool
+
+if __name__ == "__main__":
+    register()
