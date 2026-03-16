@@ -1,6 +1,6 @@
 bl_info = {
     "name": "Advanced Material Editor",
-    "author": "CeoRepaQue x @Vaaster220 x @Rov1ne",
+    "author": "407RO4D x @Vaaster220 x @Rov1ne",
     "version": (2, 1, 0),
     "blender": (3, 0, 0),
     "location": "View3D > Sidebar > Tools",
